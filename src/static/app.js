@@ -3,15 +3,34 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const availabilityMessage = document.getElementById("availability-message");
+  const signupButton = signupForm.querySelector('button[type="submit"]');
+  let activities = {};
+
+  function updateSignupAvailability() {
+    const activity = activities[activitySelect.value];
+    const isFull =
+      activity &&
+      activity.participants.length >= activity.max_participants;
+
+    signupButton.disabled = Boolean(isFull);
+    availabilityMessage.textContent = isFull
+      ? "This activity is full. Please choose another activity."
+      : "";
+    availabilityMessage.className = isFull ? "message error" : "hidden";
+  }
 
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
       const response = await fetch("/activities");
-      const activities = await response.json();
+      activities = await response.json();
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      const selectedActivity = activitySelect.value;
+      activitySelect.innerHTML =
+        '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -20,6 +39,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft =
           details.max_participants - details.participants.length;
+        const isFull = spotsLeft <= 0;
+        const availability = isFull ? "Full" : `${spotsLeft} spots left`;
 
         // Create participants HTML with delete icons instead of bullet points
         const participantsHTML =
@@ -41,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
-          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          <p><strong>Availability:</strong> ${availability}</p>
           <div class="participants-container">
             ${participantsHTML}
           </div>
@@ -52,9 +73,15 @@ document.addEventListener("DOMContentLoaded", () => {
         // Add option to select dropdown
         const option = document.createElement("option");
         option.value = name;
-        option.textContent = name;
+        option.textContent = isFull ? `${name} (Full)` : name;
+        option.disabled = isFull;
         activitySelect.appendChild(option);
       });
+
+      if (selectedActivity in activities) {
+        activitySelect.value = selectedActivity;
+      }
+      updateSignupAvailability();
 
       // Add event listeners to delete buttons
       document.querySelectorAll(".delete-btn").forEach((button) => {
@@ -111,6 +138,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Handle form submission
+  activitySelect.addEventListener("change", updateSignupAvailability);
+
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -139,6 +168,9 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
+        if (response.status === 409) {
+          fetchActivities();
+        }
       }
 
       messageDiv.classList.remove("hidden");
